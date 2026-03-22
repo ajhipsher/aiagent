@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
+from prompts import system_prompt
+
 load_dotenv()
 api_key = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
@@ -15,14 +17,18 @@ parser.add_argument("--verbose", action="store_true", help="Enable verbose outpu
 args = parser.parse_args()
 
 messages = [types.Content(role="user", parts=[types.Part(text=args.user_prompt)])]
+model_name = "gemini-2.5-flash"
 
 
 def main():
     if api_key == None:
         raise RuntimeError("Your API key isn't working.")
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=model_name,
         contents=messages,
+        config=types.GenerateContentConfig(
+            system_instruction=system_prompt, temperature=0
+        ),
     )
     if response.usage_metadata == None:
         raise RuntimeError("Usage metadata was not returned.")
