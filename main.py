@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-from call_function import available_functions
+from call_function import available_functions, call_function
 from prompts import system_prompt
 
 load_dotenv()
@@ -35,8 +35,18 @@ def main():
         raise RuntimeError("Usage metadata was not returned.")
 
     if response.function_calls is not None:
+        function_result_list = []
         for function_call in response.function_calls:
-            print(f"Calling function: {function_call.name}({function_call.args})")
+            function_call_result = call_function(function_call, verbose=args.verbose)
+            if function_call_result.parts is None:
+                raise Exception("Parts are None")
+            if function_call_result.parts[0].function_response is None:
+                raise Exception("Function response is None")
+            if function_call_result.parts[0].function_response.response is None:
+                raise Exception("Function response value is None")
+            if args.verbose:
+                print(f"-> {function_call_result.parts[0].function_response.response}")
+            function_result_list.append(function_call_result.parts[0])
 
     else:
         print(response.text)
