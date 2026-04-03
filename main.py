@@ -22,20 +22,36 @@ model_name = "gemini-2.5-flash"
 
 
 def main():
-    if api_key == None:
+    if api_key is None:
         raise RuntimeError("Your API key isn't working.")
-    response = client.models.generate_content(
-        model=model_name,
-        contents=messages,
-        config=types.GenerateContentConfig(
-            tools=[available_functions], system_instruction=system_prompt
-        ),
-    )
-    if response.usage_metadata == None:
-        raise RuntimeError("Usage metadata was not returned.")
 
-    if response.function_calls is not None:
-        function_result_list = []
+    for _ in range(20):
+        response = client.models.generate_content(
+            model=model_name,
+            contents=messages,
+            config=types.GenerateContentConfig(
+                tools=[available_functions], system_instruction=system_prompt
+            ),
+        )
+
+        if response.usage_metadata is None:
+            raise RuntimeError("Usage metadata was not returned.")
+
+        if args.verbose:
+            print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
+            print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
+
+        # No remaining function calls means we have a final text response, loop exits
+        if not response.function_calls:
+            print(response.text)
+            return
+
+        # Append the model's response (with function call parts) to history
+        if response.candidates is not None:
+            messages.append(response.candidates[0].content)
+
+        # Process each function call and collect results
+        function_result_parts = []
         for function_call in response.function_calls:
             function_call_result = call_function(function_call, verbose=args.verbose)
             if function_call_result.parts is None:
@@ -46,15 +62,12 @@ def main():
                 raise Exception("Function response value is None")
             if args.verbose:
                 print(f"-> {function_call_result.parts[0].function_response.response}")
-            function_result_list.append(function_call_result.parts[0])
+            function_result_parts.append(function_call_result.parts[0])
 
-    else:
-        print(response.text)
+        # Append function results to history for next iteration
+        messages.append(types.Content(role="user", parts=function_result_parts))
 
-    if args.verbose:
-        print(f"User prompt: {args.user_prompt}")
-        print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
-        print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
+    print("Max iterations reached without a final response.")
 
 
 if __name__ == "__main__":
